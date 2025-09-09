@@ -2,6 +2,7 @@
 #![no_main]
 
 use cortex_m_rt::pre_init;
+use embassy_stm32::{peripherals, Peri};
 use embassy_sync::pubsub::PubSubChannel;
 use core::arch::asm;
 use defmt::*;
@@ -14,12 +15,13 @@ use embassy_stm32::usart::{self, Uart};
 use embassy_stm32::timer::simple_pwm::{PwmPin,SimplePwm};
 use embassy_stm32::time::hz;
 use embassy_stm32::exti::ExtiInput;
-use embassy_time::Timer;
+use embassy_time::{Duration, Timer};
 use embassy_sync::channel::Channel;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use heapless::String;
 use core::fmt::Write;
+use embassy_stm32::adc::Adc;
 use {defmt_rtt as _, panic_probe as _};
 
 static DUTY_CYCLE:AtomicU8=AtomicU8::new(0);
@@ -278,6 +280,19 @@ async fn uart_task(mut lpuart: Uart<'static, embassy_stm32::mode::Async>) {
     }
 }
 
+//adc task
+#[embassy_executor::task]
+async fn adc_task(mut adc:Adc<'static,peripherals::ADC1>,mut pin:Peri<'static,peripherals::PC0>){
+    adc.set_sample_time(embassy_stm32::adc::SampleTime::CYCLES144);
+    adc.set_resolution(embassy_stm32::adc::Resolution::BITS12);
+
+    loop{
+        let raw=adc.blocking_read(&mut pin);
+        let v=(raw as u32*3300)/4095;
+        info!("PC1: {}",v);
+        Timer::after(Duration::from_hz(60000)).await;
+    }
+}
 bind_interrupts!(struct Irqs {
     USART1 => embassy_stm32::usart::InterruptHandler<embassy_stm32::peripherals::USART1>;
 });
@@ -374,6 +389,9 @@ spawner.spawn(uart_task(uart)).unwrap();
     spawner.spawn(pwm_task2(pwm2)).unwrap();
 
     let mut led = Output::new(p.PA5, Level::High, Speed::Low);
+
+    //Creation of adc task
+    spawner.spawn(adc_task(Adc::new(p.ADC1),p.PC0.into())).unwrap();
 
     loop {
         led.set_high();
