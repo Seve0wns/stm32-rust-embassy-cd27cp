@@ -282,15 +282,15 @@ async fn uart_task(mut lpuart: Uart<'static, embassy_stm32::mode::Async>) {
 
 //adc task
 #[embassy_executor::task]
-async fn adc_task(mut adc:Adc<'static,peripherals::ADC1>,mut pin:Peri<'static,peripherals::PC0>){
+async fn adc_task(mut adc:Adc<'static,peripherals::ADC1>,mut pin:Peri<'static,peripherals::PA1>){
     adc.set_sample_time(embassy_stm32::adc::SampleTime::CYCLES144);
     adc.set_resolution(embassy_stm32::adc::Resolution::BITS12);
 
     loop{
         let raw=adc.blocking_read(&mut pin);
         let v=(raw as u32*3300)/4095;
-        info!("PC1: {}",v);
-        Timer::after(Duration::from_hz(60000)).await;
+        info!("PA1: {}",v);
+        Timer::after(Duration::from_hz(1)).await;
     }
 }
 bind_interrupts!(struct Irqs {
@@ -391,7 +391,7 @@ spawner.spawn(uart_task(uart)).unwrap();
     let mut led = Output::new(p.PA5, Level::High, Speed::Low);
 
     //Creation of adc task
-    spawner.spawn(adc_task(Adc::new(p.ADC1),p.PC0.into())).unwrap();
+    spawner.spawn(adc_task(Adc::new(p.ADC1),p.PA1.into())).unwrap();
 
     loop {
         led.set_high();
